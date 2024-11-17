@@ -5,7 +5,7 @@ pipeline {
         CONTAINER_ID = ''
         SUM_PY_PATH = './sum.py'
         DIR_PATH = './'
-        TEST_FILE_PATH = './test_variables.txt'
+        TEST_FILE_PATH = './teste_variables.txt'
     }
 
     stages {
