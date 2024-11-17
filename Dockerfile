@@ -1,15 +1,12 @@
-# Utiliser une image de base Python alpine
+# Utiliser une image Python légère
 FROM python:3.13.0-alpine3.20
 
 # Définir le répertoire de travail
 WORKDIR /app
 
-# Copier le fichier sum.py dans le conteneur
+# Copier le script Python et le fichier de test dans le conteneur
 COPY sum.py /app/sum.py
+COPY teste_variables.txt /app/teste_variables.txt
 
-# Rendre le script exécutable
-ENTRYPOINT ["python", "/app/sum.py"]
-
-
-# Commande par défaut pour garder le conteneur actif
-CMD ["tail", "-f", "/dev/null"]
+# Définir la commande par défaut
+CMD ["python", "/app/sum.py"]
