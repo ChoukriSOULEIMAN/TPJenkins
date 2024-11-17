@@ -1,12 +1,16 @@
-# Utiliser une image Python légère
-FROM python:3.13.0-alpine3.20
+FROM python:3.9-slim
 
-# Définir le répertoire de travail
+# Installation des dépendances Python
+RUN pip install sphinx
+
+# Copier le script Python dans le conteneur
+COPY sum.py /app/sum.py
 WORKDIR /app
 
-# Copier le script Python et le fichier de test dans le conteneur
-COPY sum.py /app/sum.py
-COPY teste_variables.txt /app/teste_variables.txt
+# Ici nous allons initialiser le projet Sphinx
+RUN sphinx-quickstart -q -p "TPJenkins" -a "Auteur" -v "1.0" --sep -r 1.0
 
-# Définir la commande par défaut
-CMD ["python", "/app/sum.py"]
+# Et enfin installer sphinx-autodoc pour la documentation automatique
+RUN pip install sphinx-autodoc-typehints
+
+CMD ["python3", "sum.py"]

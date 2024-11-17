@@ -9,6 +9,7 @@ pipeline {
         DOCKER_USERNAME = 'choukri34'       
         DOCKER_PASSWORD = 'choukri34'
     }
+
     stages {
         stage('Build') {
             steps {
@@ -19,54 +20,103 @@ pipeline {
             }
         }
     }
-    stage('Run') {
-            steps {
-                echo 'Exécution du conteneur Docker...'
-                script {
-                    def output = sh(script: 'docker run -d python-sum-app', returnStdout: true)
-                    CONTAINER_ID = output.trim()
-                    echo "Conteneur démarré avec ID : ${CONTAINER_ID}"
-                }
-            }
-    stage('Test') {
-            steps {
-                echo 'Lancement des tests...'
-                script {
-                    def testLines = readFile(TEST_FILE_PATH).split('\n')
-                    for (line in testLines) {
-                        def vars = line.split(' ')
-                        def arg1 = vars[0]
-                        def arg2 = vars[1]
-                        def expectedSum = vars[2].toFloat()
 
-                        def output = sh(script: "docker exec ${CONTAINER_ID} python /app/sum.py ${arg1} ${arg2}", returnStdout: true).trim()
-                        def result = output.toFloat()
-
-                        if (result == expectedSum) {
-                            echo "Test réussi : ${arg1} + ${arg2} = ${result}"
-                        } else {
-                            error "Test échoué : ${arg1} + ${arg2} != ${expectedSum}, obtenu ${result}"
-                        }
-                    }
+        stage('Run') {
+            steps {
+                script {
+                    echo 'Démarrage du conteneur Docker.........'
+                    def output = bat(script: 'docker run -d python-sum tail -f /dev/null', returnStdout: true)
+                    CONTAINER_ID = output.trim().split('\r\n')[-1].trim()
+                    echo "Conteneur démarré avec l'ID : ${CONTAINER_ID}"
                 }
             }
         }
+
+        stage('Test'){
+            steps {
+                script{
+                    echo"Exécution des tests..........."
+                    def testLines = readFile("${TEST_FILE_PATH}").split('\n')
+                        for (line in testLines) {
+                            line = line.trim()
+                            if(line && line.split(' ').length == 3) {
+                                def vars = line.split(' ')
+                                try {
+                                    def arg1 = vars[0]
+                                    def arg2 = vars[1]
+                                    def expectedSum = vars[2].toFloat()
+
+                                    def output = bat(script: "docker exec ${CONTAINER_ID} python /app/sum.py ${arg1} ${arg2}", returnStdout: true)
+                                    def result = output.split('\n')[-1].trim().toFloat()
+
+                                    if (result == expectedSum) {
+                                        echo "Test réussi pour ${arg1} + ${arg2} = ${expectedSum}"
+                                    } else {
+                                        error "Échec du test pour ${arg1} + ${arg2}. Résultat attendu : ${expectedSum}, obtenu : ${result}"
+                                    }
+                                } catch (Exception e){
+                                    error "Erreur lors du traitement de la ligne '${line}': ${e.message}"
+                                }
+                            } else {
+                                echo "Ligne ignorée : '${line}' (format incorrect)"
+                            }
+                        }
+                }   
+            }
+        }
+
+        stage('Déploiement sur DockerHub') {
+            steps {
+                echo 'Déploiement de limage Docker sur DockerHub...'
+                script {
+                    bat 'docker login -u sandrinenjeunkam -p dockerhub'
+                    bat 'docker tag python-sum sandrinenjeunkam/python-sum:latest'
+                    bat 'docker push sandrinenjeunkam/python-sum:latest'
+                }
+            }
+        }
+
+        stage('Analyse des performances') {
+            steps {
+                script {
+                    echo 'Analyse des performances du conteneur...'
+                    def statsOutput = bat(script: "docker stats ${CONTAINER_ID} --no-stream", returnStdout: true)
+                    echo "Consommation des ressources :\n${statsOutput}"
+                }
+            }
+        }
+        
+        stage('Documentation') {
+            steps {
+                script {
+                    echo 'Génération de la documentation...'
+
+                    bat "docker exec ${CONTAINER_ID} sphinx-build -b html /app/source /app/build"
+                    
+                    echo "Contenu du répertoire build :"
+                    bat "docker exec ${CONTAINER_ID} ls /app/build"
+
+                    bat "docker cp ${CONTAINER_ID}:/app/build ${WORKSPACE}/build"
+            
+                    // Afficher le contenu du répertoire où les fichiers ont été copiés
+                    bat "dir \"${WORKSPACE}\\build\""
+                    
+                    // Archiver les fichiers copiés
+                    // archiveArtifacts "${WORKSPACE}/build/*/"
+                            
+                    archiveArtifacts 'build/*/'
+                }
+            }
+        }
+
     }
+
     post {
         always {
-            echo 'Nettoyage...'
-            sh "docker stop ${CONTAINER_ID}"
-            sh "docker rm ${CONTAINER_ID}"
-        }
-    }
-    stage('Deploy') {
-            steps {
-                echo 'Déploiement sur DockerHub...'
-                script {
-                    sh 'docker login -u <votre_utilisateur> -p <votre_mot_de_passe>'
-                    sh 'docker tag python-sum-app <votre_utilisateur>/python-sum-app:latest'
-                    sh 'docker push <votre_utilisateur>/python-sum-app:latest'
-                }
+            script {
+                echo 'Arrêt et suppression du conteneur...'
+                bat "docker stop ${CONTAINER_ID}"
+                bat "docker rm ${CONTAINER_ID}"
             }
         }
-}    
+    }
